@@ -1,14 +1,19 @@
+using System.Net;
 using System.Text;
 using DatingApp.API.Data;
+using DatingApp.API.Helper;
 using DatingApp.API.Repo;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+
 
 namespace DatingApp.API
 {
@@ -31,15 +36,17 @@ namespace DatingApp.API
             //Singllton will create only one instance of the object in entier lifcyce of an application 
             //Transient will create instance for each request 
             //Will create instance for session 
-            services.AddScoped<IAuthRepo,AuthRepo>();
+            services.AddScoped<IAuthRepo, AuthRepo>();
             //Add authentication and authorization 
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options => {
-                options.TokenValidationParameters= new TokenValidationParameters(){
-                    ValidateIssuerSigningKey=true,
-                    IssuerSigningKey=new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Configuration.GetSection("AppSetting:Token").Value)),
-                    ValidateIssuer=false,
-                    ValidateAudience=false
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters()
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Configuration.GetSection("AppSetting:Token").Value)),
+                    ValidateIssuer = false,
+                    ValidateAudience = false
                 };
             });
         }
@@ -51,7 +58,24 @@ namespace DatingApp.API
             {
                 app.UseDeveloperExceptionPage();
             }
+            else
+            {
+                //Middle layer for global exception handler
+                app.UseExceptionHandler(builder =>
+               {
+                   builder.Run(async handler =>
+                   {
+                       handler.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                       var error = handler.Features.Get<IExceptionHandlerFeature>();
+                       if (error != null)
+                       {
+                           handler.Response.AddApplicationError(error.Error.Message);
+                           await handler.Response.WriteAsync(error.Error.Message);
+                       }
+                   });
 
+               });
+            }
             //app.UseHttpsRedirection();
 
             app.UseRouting();
